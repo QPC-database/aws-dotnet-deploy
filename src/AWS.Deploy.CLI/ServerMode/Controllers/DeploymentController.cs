@@ -129,6 +129,46 @@ namespace AWS.Deploy.CLI.ServerMode.Controllers
         }
 
         /// <summary>
+        /// Gets a summary of the Recipe for the session's project.
+        /// </summary>
+        [HttpGet("session/<sessionId>/recipe/<recipeId>")]
+        [SwaggerOperation(OperationId = "GetRecipe")]
+        [SwaggerResponse(200, type: typeof(RecipeSummary))]
+        [Authorize]
+        public IActionResult GetRecipe(string sessionId, string recipeId)
+        {
+            var state = _stateServer.Get(sessionId);
+            if (state == null)
+            {
+                return NotFound($"Session ID {sessionId} not found.");
+            }
+
+            if (string.IsNullOrEmpty(recipeId))
+            {
+                return NotFound($"A Recipe ID was not provided.");
+            }
+
+            var recommendation = state.NewRecommendations?.FirstOrDefault(x => x.Recipe.Id.Equals(recipeId));
+
+            if (recommendation == null)
+            {
+                return NotFound($"Recipe ID {recipeId} not found.");
+            }
+
+            var output = new RecipeSummary(
+                recommendation.Recipe.Id,
+                recommendation.Recipe.Version,
+                recommendation.Recipe.Name,
+                recommendation.Recipe.Description,
+                recommendation.Recipe.TargetService,
+                recommendation.Recipe.DeploymentType.ToString(),
+                recommendation.Recipe.DeploymentBundle.ToString()
+                );
+
+            return Ok(output);
+        }
+
+        /// <summary>
         /// Gets the list of updatable option setting items for the selected recommendation.
         /// </summary>
         [HttpGet("session/<sessionId>/settings")]
@@ -220,7 +260,7 @@ namespace AWS.Deploy.CLI.ServerMode.Controllers
 
             return Ok(output);
         }
-        
+
         /// <summary>
         /// Gets the list of existing deployments that are compatible with the session's project.
         /// </summary>
