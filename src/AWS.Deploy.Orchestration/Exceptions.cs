@@ -1,3 +1,4 @@
+
 using System;
 using AWS.Deploy.Common;
 
@@ -145,5 +146,13 @@ namespace AWS.Deploy.Orchestration
     public class InvalidAWSDeployRecipesCDKCommonVersionException : Exception
     {
         public InvalidAWSDeployRecipesCDKCommonVersionException(string message, Exception? innerException = null) : base(message, innerException) { }
+    }
+
+    /// <summary>
+    /// Exception thrown if any required property of the Orchestrator object is null.
+    /// </summary>
+    public class InvalidOrchestratorException : Exception
+    {
+        public InvalidOrchestratorException(string message, Exception? innerException = null) : base(message, innerException) { }
     }
 }

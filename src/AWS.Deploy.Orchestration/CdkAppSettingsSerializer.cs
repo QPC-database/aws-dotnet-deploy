@@ -23,8 +23,8 @@ namespace AWS.Deploy.Orchestration
                 projectPath,
                 recommendation.Recipe.Id,
                 recommendation.Recipe.Version,
-                session.AWSAccountId,
-                session.AWSRegion,
+                session.AWSAccountId ?? "",
+                session.AWSRegion ?? "",
                 new ()
                 )
             {

@@ -32,6 +32,7 @@ namespace AWS.Deploy.CLI.Commands
         private static readonly Option<bool> _optionDiagnosticLogging = new(new []{"-d", "--diagnostics"}, "Enable diagnostic output.");
         private static readonly Option<string> _optionApply = new("--apply", "Path to the deployment settings file to be applied.");
         private static readonly Option<bool> _optionDisableInteractive = new(new []{"-s", "--silent" }, "Disable interactivity to deploy without any prompts for user input.");
+        private static readonly Option<string> _optionOutputDirectory = new(new[]{"-o", "--output"}, "Directory path in which the CDK deployment project will be saved.");
 
         private readonly IToolInteractiveService _toolInteractiveService;
         private readonly IOrchestratorInteractiveService _orchestratorInteractiveService;
@@ -98,6 +99,7 @@ namespace AWS.Deploy.CLI.Commands
             rootCommand.Add(BuildDeployCommand());
             rootCommand.Add(BuildListCommand());
             rootCommand.Add(BuildDeleteCommand());
+            rootCommand.Add(BuildDeploymentProjectCommand());
             rootCommand.Add(BuildServerModeCommand());
 
             return rootCommand;
@@ -305,6 +307,73 @@ namespace AWS.Deploy.CLI.Commands
                 }
             });
             return listCommand;
+        }
+
+        /// <summary>
+        /// Builds the top level command called "deployment-project" which supports the creation and saving on the
+        /// CDK deployment project.
+        /// </summary>
+        /// <returns>An instance of the <see cref="Command"/> class</returns>
+        private Command BuildDeploymentProjectCommand()
+        {
+            var deploymentProjectCommand = new Command("deployment-project",
+                "Save the CDK deployment project inside a user provided directory path.");
+
+            var generateDeploymentProjectCommand = new Command("generate",
+                "Save the CDK deployment project inside a user provided directory path without proceeding with a deployment")
+            {
+                _optionOutputDirectory,
+                _optionDiagnosticLogging,
+                _optionProjectPath
+            };
+
+            generateDeploymentProjectCommand.Handler = CommandHandler.Create(async (GenerateDeploymentProjectCommandHandlerInput input) =>
+            {
+                try
+                {
+                    _toolInteractiveService.Diagnostics = input.Diagnostics;
+                    var projectDefinition = await _projectParserUtility.Parse(input.ProjectPath ?? "");
+
+                    var saveDirectory = input.Output ?? "";
+
+                    OrchestratorSession session = new OrchestratorSession(projectDefinition);
+
+                    var generateDeploymentProject = new GenerateDeploymentProjectCommand(
+                        _toolInteractiveService,
+                        _consoleUtilities,
+                        _cdkProjectHandler,
+                        _commandLineWrapper,
+                        session);
+
+                    await generateDeploymentProject.ExecuteAsync(saveDirectory);
+
+                    return CommandReturnCodes.SUCCESS;
+                }
+                catch (Exception e) when (e.IsAWSDeploymentExpectedException())
+                {
+                    if (input.Diagnostics)
+                        _toolInteractiveService.WriteErrorLine(e.PrettyPrint());
+                    else
+                    {
+                        _toolInteractiveService.WriteErrorLine(string.Empty);
+                        _toolInteractiveService.WriteErrorLine(e.Message);
+                    }
+                    // bail out with an non-zero return code.
+                    return CommandReturnCodes.USER_ERROR;
+                }
+                catch (Exception e)
+                {
+                    // This is a bug
+                    _toolInteractiveService.WriteErrorLine(
+                        "Unhandled exception.  This is a bug.  Please copy the stack trace below and file a bug at https://github.com/aws/aws-dotnet-deploy. " +
+                        e.PrettyPrint());
+
+                    return CommandReturnCodes.UNHANDLED_EXCEPTION;
+                }
+            });
+
+            deploymentProjectCommand.Add(generateDeploymentProjectCommand);
+            return deploymentProjectCommand;
         }
 
         private Command BuildServerModeCommand()

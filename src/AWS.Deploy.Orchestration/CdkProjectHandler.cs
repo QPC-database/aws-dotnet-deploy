@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -12,6 +13,7 @@ namespace AWS.Deploy.Orchestration
     public interface ICdkProjectHandler
     {
         public Task CreateCdkDeployment(OrchestratorSession session, CloudApplication cloudApplication, Recommendation recommendation);
+        public Task<string> CreateCdkProjectForDeployment(Recommendation recommendation, OrchestratorSession session, string? saveDirectoryPath = null);
     }
 
     public class CdkProjectHandler : ICdkProjectHandler
@@ -61,18 +63,47 @@ namespace AWS.Deploy.Orchestration
                 needAwsCredentials: true);
         }
 
-        private async Task<string> CreateCdkProjectForDeployment(Recommendation recommendation, OrchestratorSession session)
+        public async Task<string> CreateCdkProjectForDeployment(Recommendation recommendation, OrchestratorSession session, string? saveCdkDirectoryPath = null)
         {
-            var tempDirectoryPath =
+            string? assemblyName;
+            if (string.IsNullOrEmpty(saveCdkDirectoryPath))
+            {
+                saveCdkDirectoryPath =
                 Path.Combine(
                     Constants.CDK.ProjectsDirectory,
                     Path.GetFileNameWithoutExtension(Path.GetRandomFileName()));
-            Directory.CreateDirectory(tempDirectoryPath);
+
+                assemblyName = recommendation.ProjectDefinition.AssemblyName;
+            }
+            else
+            {
+                assemblyName = new DirectoryInfo(saveCdkDirectoryPath).Name;
+            }
+
+            if (string.IsNullOrEmpty(assemblyName))
+                throw new ArgumentNullException("The assembly name for the CDK deployment project cannot be null");
+           
+            Directory.CreateDirectory(saveCdkDirectoryPath);
 
             var templateEngine = new TemplateEngine();
-            await templateEngine.GenerateCDKProjectFromTemplate(recommendation, session, tempDirectoryPath);
+            await templateEngine.GenerateCDKProjectFromTemplate(recommendation, session, saveCdkDirectoryPath, assemblyName);
 
-            return tempDirectoryPath;
+            GenerateDeploymentRecipeSnapShot(recommendation, saveCdkDirectoryPath);
+
+            return saveCdkDirectoryPath;
+        }
+
+        /// <summary>
+        /// Generates a snapshot of the deployment recipe inside the location at which the CDK deployment project is saved.
+        /// </summary>
+        /// <param name="recommendation"><see cref="Recommendation"/></param>
+        /// <param name="saveCdkDirectoryPath"></param>
+        private void GenerateDeploymentRecipeSnapShot(Recommendation recommendation, string saveCdkDirectoryPath)
+        {
+            var sourceFileName = recommendation.Recipe.RecipePath;
+            var recipeId = recommendation.Recipe.Id;
+            var destFileName = Path.Combine(saveCdkDirectoryPath, recipeId + "-" + Guid.NewGuid().ToString() + ".recipe");
+            File.Copy(sourceFileName, destFileName);
         }
     }
 }

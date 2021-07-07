@@ -31,7 +31,7 @@ namespace AWS.Deploy.Orchestration
             _bootstrapper = new Bootstrapper(CreateHost(), null, virtualizeConfiguration: true);
         }
 
-        public async Task GenerateCDKProjectFromTemplate(Recommendation recommendation, OrchestratorSession session, string outputDirectory)
+        public async Task GenerateCDKProjectFromTemplate(Recommendation recommendation, OrchestratorSession session, string outputDirectory, string assemblyName)
         {
             //The location of the base template that will be installed into the templating engine
             var cdkProjectTemplateDirectory = Path.Combine(
@@ -56,14 +56,16 @@ namespace AWS.Deploy.Orchestration
                 throw new Exception($"Failed to find a Template for [{recommendation.Recipe.CdkProjectTemplateId}]");
 
             var templateParameters = new Dictionary<string, string> {
-                { "AWSAccountID" , session.AWSAccountId },
-                { "AWSRegion" , session.AWSRegion },
-
                 // CDK Template projects can parameterize the version number of the AWS.Deploy.Recipes.CDK.Common package. This avoid
                 // projects having to be modified every time the package version is bumped.
                 { "AWSDeployRecipesCDKCommonVersion", FileVersionInfo.GetVersionInfo(typeof(Constants.CloudFormationIdentifier).Assembly.Location).ProductVersion
                                                       ?? throw new InvalidAWSDeployRecipesCDKCommonVersionException("The version number of the AWS.Deploy.Recipes.CDK.Common package is invalid.") }
             };
+
+            if (!string.IsNullOrEmpty(session.AWSAccountId))
+                templateParameters["AWSAccountID"] = session.AWSAccountId;
+            if (!string.IsNullOrEmpty(session.AWSRegion))
+                templateParameters["AWSRegion"] = session.AWSRegion;
 
             foreach(var option in recommendation.Recipe.OptionSettings)
             {
@@ -74,7 +76,7 @@ namespace AWS.Deploy.Orchestration
             try
             {
                 //Generate the CDK project using the installed template into the output directory
-                await _bootstrapper.CreateAsync(template, recommendation.ProjectDefinition.AssemblyName, outputDirectory, templateParameters, false, "");
+                await _bootstrapper.CreateAsync(template, assemblyName, outputDirectory, templateParameters, false, "");
             }
             catch
             {
